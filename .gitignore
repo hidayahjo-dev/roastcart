@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+backend/.venv/
+
+# Environment variables
+.env
+*.env
+
+# Node
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
