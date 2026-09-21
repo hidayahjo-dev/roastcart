@@ -1,0 +1,2 @@
+# Project Statement
+RoastCart is a cloud-hosted e-commerce application that allows customers to browse specialty coffee products, manage a cart and place simulated orders. The primary project objective is to demonstrate how a locally developed application can be tested, containerised, provisioned, deployed, monitored and recovered using modern Cloud and DevOps practices
