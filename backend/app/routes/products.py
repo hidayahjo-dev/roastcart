@@ -1,7 +1,5 @@
-# backend/app/routes/products.py
-
 from flask import Blueprint, jsonify
-from app.data.products import products
+from backend.app.data.products import products
 
 products_bp = Blueprint("products", __name__, url_prefix="/api/v1")
 
