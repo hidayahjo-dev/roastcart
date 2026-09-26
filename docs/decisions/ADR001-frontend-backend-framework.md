@@ -8,13 +8,7 @@ Use:
 
 React/Vite for the storefront
 Flask for the REST API
-A monorepo containing separate frontend and backend directories
-
-## Alternatives
-Entire application built with Flask templates
-Next.js full-stack application
-Django
-Separate repositories
+A monorepo containing separate `frontend` and `backend` directories
 
 ## Why
 
