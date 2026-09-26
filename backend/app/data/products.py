@@ -1,6 +1,7 @@
 products = [
     {
-        "id": "sumatra",
+        "id": 1,
+        "product_id": "sumatra",
         "name": "Sumatra Mandheling",
         "origin": "Indonesia",
         "tastingNotes": "Cedar · Dark chocolate · Spice",
@@ -10,7 +11,8 @@ products = [
         "color": "earth",
     },
     {
-        "id": "yirgacheffe",
+        "id": 2,
+        "product_id": "sumatra",
         "name": "Yirgacheffe Bloom",
         "origin": "Ethiopia",
         "tastingNotes": "Jasmine · Peach · Bergamot",
@@ -20,7 +22,8 @@ products = [
         "color": "clay",
     },
     {
-        "id": "huila",
+        "id": 3,
+        "product_id": "huila",
         "name": "Huila Decaf",
         "origin": "Colombia",
         "tastingNotes": "Toffee · Apple · Cocoa",
@@ -30,7 +33,8 @@ products = [
         "color": "sun",
     },
     {
-        "id": "yirgacheffe",
+        "id": 4,
+        "product_id": "yirgacheffe",
         "name": "Yirgacheffe Bloom",
         "origin": "Ethiopia",
         "tastingNotes": "Jasmine · Peach · Bergamot",
@@ -40,7 +44,8 @@ products = [
         "color": "clay",
     },
     {
-        "id": "yirgacheffe",
+        "id": 5,
+        "product_id": "yirgacheffe",
         "name": "Yirgacheffe Bloom",
         "origin": "Ethiopia",
         "tastingNotes": "Jasmine · Peach · Bergamot",
@@ -50,7 +55,8 @@ products = [
         "color": "clay",
     },
     {
-        "id": "yirgacheffe",
+        "id": 6,
+        "product_id": "yirgacheffe",
         "name": "Yirgacheffe Bloom",
         "origin": "Ethiopia",
         "tastingNotes": "Jasmine · Peach · Bergamot",

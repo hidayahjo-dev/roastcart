@@ -39,17 +39,24 @@ export default function App() {
     loadProducts();
   }, []);
 
-  const visibleProducts = useMemo(
-    () =>
-      products.filter((product) => {
-        const matchesFilter =
-          activeFilter === "All coffee" || product.roast === activeFilter;
-        const searchText =
-          `${product.name} ${product.origin} ${product.tastingNotes}`.toLowerCase();
-        return matchesFilter && searchText.includes(query.toLowerCase());
-      }),
-    [products, activeFilter, query],
-  );
+  const visibleProducts = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return products.filter((product) => {
+      const matchesFilter =
+        activeFilter === "All coffee" || product.roast === activeFilter;
+      const searchText = [
+        product.name,
+        product.origin,
+        product.tastingNotes,
+        product.roast,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return matchesFilter && searchText.includes(normalizedQuery);
+    });
+  }, [products, activeFilter, query]);
+
   const scrollToCoffee = () =>
     document.getElementById("coffee")?.scrollIntoView({ behavior: "smooth" });
 
