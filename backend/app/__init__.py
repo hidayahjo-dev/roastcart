@@ -7,7 +7,7 @@ from app.routes.products import products_bp
 
 def create_app():
     app = Flask(__name__)
-    CORS(app)
+    # CORS(app)
 
     app.register_blueprint(health_bp)
     app.register_blueprint(products_bp)
