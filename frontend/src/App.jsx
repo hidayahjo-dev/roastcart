@@ -4,11 +4,13 @@ import ProductCard from "./components/ProductCard.jsx";
 
 const filters = [
   "All coffee",
-  "Light roast",
-  "Medium roast",
-  "Dark roast",
-  "Espresso roast",
+  "Light Roast",
+  "Medium Roast",
+  "Dark Roast",
+  "Espresso Roast",
 ];
+
+const productColors = ["earth", "clay", "sun", "rose", "moss"];
 
 export default function App() {
   const [products, setProducts] = useState([]);
@@ -43,12 +45,12 @@ export default function App() {
     const normalizedQuery = query.trim().toLowerCase();
     return products.filter((product) => {
       const matchesFilter =
-        activeFilter === "All coffee" || product.roast === activeFilter;
+        activeFilter === "All coffee" || product.roast_level === activeFilter;
       const searchText = [
-        product.name,
+        product.product_name,
         product.origin,
-        product.tastingNotes,
-        product.roast,
+        product.tasting_notes,
+        product.roast_level,
       ]
         .filter(Boolean)
         .join(" ")
@@ -146,9 +148,10 @@ export default function App() {
 
           {!isLoading &&
             !error &&
-            visibleProducts.map((product) => (
+            visibleProducts.map((product, index) => (
               <ProductCard
                 key={product.id}
+                color={productColors[index % productColors.length]}
                 product={product}
                 onAddToCart={() => setCartCount((count) => count + 1)}
               />

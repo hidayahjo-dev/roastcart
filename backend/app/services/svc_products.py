@@ -10,7 +10,9 @@ def svc_get_all_products():
         {
             "id": product.id,
             "sku": product.sku,
-            "name": product.name,
+            "product_name": product.product_name,
+            "origin": product.origin,
+            "tasting_notes": product.tasting_notes,
             "description": product.description,
             "price": str(product.price),
             "roast_level": product.roast_level,

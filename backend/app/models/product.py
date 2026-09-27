@@ -15,12 +15,19 @@ class Product(db.Model):
         index=True,
     )
 
-    name = db.Column(
+    product_name = db.Column(
         db.String(120),
         nullable=False,
     )
 
-    description = db.Column(
+    origin = db.Column(
+        db.String(120),
+        nullable=False,
+    )
+
+    description = db.Column(db.Text, nullable=False)
+
+    tasting_notes = db.Column(
         db.Text,
         nullable=True,
     )
