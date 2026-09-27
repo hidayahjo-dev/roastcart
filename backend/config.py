@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
-# to pull secrets from backend/.env
+# Load environment variables from the project root .env
 load_dotenv(ROOT_DIR / ".env")
 
 

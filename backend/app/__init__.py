@@ -1,7 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
-from .extensions import db
 from backend.config import Config
+from .extensions import db
 
 from .routes.health import health_bp
 from .routes.products import products_bp

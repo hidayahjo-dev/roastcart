@@ -1,12 +1,16 @@
 from flask import Blueprint, jsonify
 from backend.app.data.products import products
 
+# Services
+from backend.app.services.svc_products import svc_get_all_products
+
 products_bp = Blueprint("products", __name__, url_prefix="/api/v1")
 
 
 @products_bp.route("/products", methods=["GET"])
-def get_products():
-    return jsonify(products), 200
+def get_all_products():
+    all_products = svc_get_all_products()
+    return jsonify(all_products), 200
 
 
 @products_bp.route("/products/<int:product_id>", methods=["GET"])
