@@ -1,7 +1,9 @@
+# Docker compose: describes how to run multiple containers together in a shared default network
 services:
-  postgres-db:
+  # 1. Database Tier (Uses official pre-built image)
+  postgres-db: # service key name --> used by Docker for internal service discovery and DNS routing b/w containers
     image: postgres:15-alpine
-    container_name: roastcart_db
+    container_name: roastcart_db # this is human-readable container name for running commands in terminal
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -11,6 +13,28 @@ services:
       - "5432:5432"
     volumes:
       - roastcart_postgres_data:/var/lib/postgresql/data
+
+  # 2. Application Tier (Builds your custom Flask code)
+  roastcart-backend:
+    build:
+      context: . # -> context: files Docker can see during the build
+      dockerfile: backend/Dockerfile # -> instructions Docker can use
+
+    container_name: roastcart_flask_backend
+    restart: unless-stopped
+    ports:
+      # format-> HOST:CONTAINER
+      - "5000:5000"
+
+    env_file:
+      - .env
+
+    environment:
+      FLASK_DEBUG: "1"
+      # CRUCIAL DEVOPS CONCEPT: Inside the Docker network, we connect to the service name 'postgres-db', NOT 'localhost'
+      DATABASE_URL: postgresql+psycopg://${DB_USER}:${DB_PASSWORD}@postgres-db:5432/${DB_NAME}
+    depends_on:
+      - postgres-db
 
 volumes:
   roastcart_postgres_data:

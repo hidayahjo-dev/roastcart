@@ -1,25 +1,63 @@
 # Branch Milestone
 
-### Database Containerization Milestone
+### Flask Containerization Milestone
 
-This branch introduces a containerized PostgreSQL database for RoastCart while keeping the React frontend and Flask backend running natively on the host machine for easier development and troubleshooting.
-PostgreSQL now runs from the official `postgres:15-alpine` image through Docker Compose. The Compose configuration creates the database service, publishes PostgreSQL on port `5432`, injects database credentials from the root `.env` file, and stores database files in a named Docker volume so data survives container restarts and recreation.
-Flask connects from the host machine to the PostgreSQL container through `localhost:5432` using a `DATABASE_URL` loaded from environment variables. SQLAlchemy and Psycopg are used as the application database layer and PostgreSQL driver. The products table has been created and seeded successfully with six coffee products.
+Progress RoastCart from a partially containerised local application to a multi-container setup:
 
-### Current development flow
+#### Before
 
 ```
-React (host)
-     │
-     ▼
-Flask (host)
-     │
-     │ localhost:5432
-     ▼
-PostgreSQL (Docker container)
-     │
-     ▼
-Persistent Docker volume
+React (native) -> Flask (native) -> PostgreSQL (container)
 ```
 
-This stage keeps application development simple while introducing containerized infrastructure, secret management, persistent storage, and a reproducible database environment before the Flask and React applications are containerized later.
+#### After
+
+```
+React (native) -> Flask (container) -> PostgreSQL (container)
+```
+
+The goal of this branch was to build a custom Docker image for the Flask backend, run Flask and PostgreSQL as separate containers under Docker Compose, and verify that the existing React frontend could still retrieve product data successfully.
+
+#### What Changed
+
+- Added a custom backend/Dockerfile for the Flask application.
+- Extended `docker-compose.yml` with a roastcart-backend service.
+- Kept PostgreSQL on the official `postgres:15-alpine` image.
+- Used Docker Compose to create and coordinate the Flask and PostgreSQL containers.
+- Used the Compose service name postgres-db as the database hostname inside the Docker network.
+- Configured SQLAlchemy to use the installed Psycopg 3 driver with:
+  postgresql+psycopg://...
+- Exposed Flask from container port 5000 to host port 5000.
+- Kept the PostgreSQL named volume so database data survives container recreation.
+- Verified the Flask API with curl.
+- Verified the existing React/Vite frontend still retrieves database-backed products.
+
+### Verification Result
+
+```
+React (npm run dev)
+        |
+        | HTTP
+        v
+Flask container :5000
+        |
+        | Docker internal DNS
+        | postgres-db:5432
+        v
+PostgreSQL container
+        |
+        v
+Persistent named volume
+```
+
+#### Verified outcomes:
+
+- Flask container builds successfully.
+- Flask container remains in the Up state.
+- Flask resolves and connects to postgres-db.
+- curl `http://localhost:5000/api/v1/product` returns product data.
+- React retrieves and displays those products through the containerised Flask backend.
+
+### Key Learning
+
+This branch moves RoastCart from "using a database container" to operating a small multi-container application. The backend and database are independently packaged services, but Docker Compose gives them a shared network, service discovery, environment configuration, port publishing, persistence, startup coordination, and a single command to run the local stack.
