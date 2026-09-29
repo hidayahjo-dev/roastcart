@@ -36,5 +36,18 @@ services:
     depends_on:
       - postgres-db
 
+  roastcart-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+    container_name: roastcart_react_frontend
+    restart: unless-stopped
+
+    ports:
+      - "5173:5173"
+    depends_on:
+      - roastcart-backend
+
 volumes:
   roastcart_postgres_data:
