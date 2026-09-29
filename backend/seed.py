@@ -1,8 +1,8 @@
 from decimal import Decimal
 
-from backend.app import create_app
-from backend.app.extensions import db
-from backend.app.models.product import Product
+from app import create_app
+from app.extensions import db
+from app.models.product import Product
 
 app = create_app()
 

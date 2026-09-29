@@ -17,8 +17,8 @@ services:
   # 2. Application Tier (Builds your custom Flask code)
   roastcart-backend:
     build:
-      context: . # -> context: files Docker can see during the build
-      dockerfile: backend/Dockerfile # -> instructions Docker can use
+      context: ./backend # -> context: files Docker can see during the build
+      dockerfile: Dockerfile # -> instructions Docker can use
 
     container_name: roastcart_flask_backend
     restart: unless-stopped
