@@ -1,5 +1,5 @@
-from backend.app.extensions import db
-from backend.app.models.product import Product
+from app.extensions import db
+from app.models.product import Product
 
 
 def svc_get_all_products():

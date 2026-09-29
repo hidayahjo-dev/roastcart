@@ -17,8 +17,8 @@ services:
   # 2. Application Tier (Builds your custom Flask code)
   roastcart-backend:
     build:
-      context: . # -> context: files Docker can see during the build
-      dockerfile: backend/Dockerfile # -> instructions Docker can use
+      context: ./backend # -> context: files Docker can see during the build
+      dockerfile: Dockerfile # -> instructions Docker can use
 
     container_name: roastcart_flask_backend
     restart: unless-stopped
@@ -35,6 +35,19 @@ services:
       DATABASE_URL: postgresql+psycopg://${DB_USER}:${DB_PASSWORD}@postgres-db:5432/${DB_NAME}
     depends_on:
       - postgres-db
+
+  roastcart-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+
+    container_name: roastcart_react_frontend
+    restart: unless-stopped
+
+    ports:
+      - "5173:5173"
+    depends_on:
+      - roastcart-backend
 
 volumes:
   roastcart_postgres_data:
