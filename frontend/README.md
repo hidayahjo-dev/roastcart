@@ -1,214 +1,170 @@
-# feature/react-container - Learning Summary
+# RoastCart - Production Frontend Container Milestone
 
-## Milestone achieved
+Branch: `feature/react-prod-container`
 
-Containerised the React/Vite frontend and completed local Docker Compose orchestration for the full RoastCart 3-tier application:
+## Milestone Summary
 
-- React + Vite frontend container
-- Flask backend container
-- PostgreSQL database container
-- All services connected through the Docker Compose default network
-- Browser accesses the frontend through `localhost:5173`
-- Vite proxies `/api` requests to the Flask service using Docker DNS
-- Flask connects to PostgreSQL using the Compose database service name
+This branch productionises the React/Vite frontend container for RoastCart.
 
-## Architecture before
+Previously, the frontend container ran the Vite development server on port `5173`. That setup was useful for local development because it provided hot reload and fast code validation, but it was not intended to be the final runtime for a production-style deployment.
 
-```text
-Browser
-  |
-  v
-React/Vite (native on host)
-  |
-  | localhost:5000
-  v
-Flask container
-  |
-  | postgres-db:5432
-  v
-PostgreSQL container
-```
+The frontend now uses a **multi-stage Docker build**:
 
-## Architecture after
+1. **Build stage - Node + Vite**
+   - Installs frontend dependencies with `npm ci`.
+   - Runs `npm run build`.
+   - Produces optimised static files in `/app/dist`.
+
+2. **Runtime stage - Nginx**
+   - Starts from a clean `nginx:alpine` image.
+   - Copies only the built `dist` artifacts into Nginx's web root.
+   - Serves the frontend on container port `80`.
+   - Proxies `/api/*` requests to the Flask backend through the Docker Compose network.
+
+Node, npm and Vite are therefore **build-time dependencies only** and are not required in the final frontend runtime image.
+
+## Updated Frontend Architecture
 
 ```text
 Browser
-  |
-  | http://localhost:5173
-  v
-React/Vite container
-  |
-  | /api -> http://roastcart-backend:5000
-  | Docker Compose network
-  v
-Flask container
-  |
-  | postgresql://postgres-db:5432
-  | Docker Compose network
-  v
-PostgreSQL container
+   |
+   | http://localhost:3000
+   v
+Nginx frontend container :80
+   |
+   |-- /, assets, client routes --> static React/Vite build
+   |
+   `-- /api/* ------------------> roastcart-backend:5000
+                                      |
+                                      v
+                                 Flask API
+                                      |
+                                      v
+                                 postgres-db:5432
 ```
 
-## Key implementation changes
+All three application tiers continue to run on the shared Docker Compose network.
 
-### Frontend Dockerfile
+## Key Files
 
-The frontend now has its own build definition:
+- `frontend/Dockerfile.dev` - local development frontend using the Vite dev server.
+- `frontend/Dockerfile.prod` - production multi-stage frontend image.
+- `frontend/nginx.conf` - Nginx routing, SPA fallback and reverse-proxy configuration.
+- `docker-compose.yml` - orchestrates PostgreSQL, Flask and the production frontend container.
 
-```dockerfile
-FROM node:20-alpine
+## Production Frontend Build
 
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci
-
-COPY . .
-
-EXPOSE 5173
-
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
-```
-
-Important points:
-
-- `node:20-alpine` provides the Node.js runtime.
-- `WORKDIR /app` provides a predictable working directory.
-- Dependency files are copied before source code to improve Docker layer caching.
-- `npm ci` installs dependencies deterministically from `package-lock.json`.
-- Vite must listen on `0.0.0.0` so the development server is reachable through Docker port mapping.
-
-### Frontend `.dockerignore`
+The production Dockerfile uses two stages:
 
 ```text
-node_modules
-dist
-.git
-.gitignore
-Dockerfile
-npm-debug.log
+React source
+   |
+   v
+Node + Vite build stage
+   |
+   | npm run build
+   v
+/dist build artifacts
+   |
+   | COPY --from=build
+   v
+Nginx runtime image
 ```
 
-The host `node_modules` should not be copied into the Linux container. Dependencies are installed inside the image by `npm ci`.
+Only the runtime stage becomes the final frontend image.
 
-### Vite proxy configuration
+## Nginx Responsibilities
 
-The browser continues using relative application routes such as:
+The custom Nginx configuration `nginx.conf` now acts as the browser-facing entry point for the application.
 
-```js
+- Serves compiled HTML, CSS, JavaScript and static assets.
+- Uses `index.html` as the fallback for frontend routes.
+- Matches `/api/` requests and reverse-proxies them to `roastcart-backend:5000`.
+- Preserves common proxy headers for the Flask service.
+
+This allows frontend code to make requests such as:
+
+```javascript
 fetch("/api/v1/products");
 ```
 
-Vite proxies `/api` requests internally to the backend Compose service:
+without exposing Docker service names to browser-side JavaScript.
 
-```js
-server: {
-  host: "0.0.0.0",
-  proxy: {
-    "/api": {
-      target: "http://roastcart-backend:5000",
-      changeOrigin: true,
-    },
-  },
-}
+## Docker Compose Change
+
+The frontend Compose service changed from the development image and Vite port:
+
+```yaml
+dockerfile: Dockerfile.dev
+ports:
+  - "5173:5173"
 ```
 
-`roastcart-backend` is resolvable only inside the Docker network. The browser itself does not resolve this hostname.
+to the production image and Nginx port:
 
-## Docker Compose standardisation
-
-Each custom application now uses its own build context:
-
-```text
-Backend                            Frontend
-
-context: ./backend                 context: ./frontend
-        |                                  |
-WORKDIR /app                       WORKDIR /app
-        |                                  |
-COPY dependency file               COPY dependency file
-        |                                  |
-install dependencies               install dependencies
-        |                                  |
-COPY . .                           COPY . .
-        |                                  |
-python run.py                      npm run dev
+```yaml
+dockerfile: Dockerfile.prod
+ports:
+  - "3000:80"
 ```
 
-This keeps each image build scoped to its own application files and makes `.dockerignore` behavior easier to reason about.
+The browser now reaches the application at `http://localhost:3000`.
 
-## Docker networking learned
+## Verification
 
-Docker Compose creates a shared default network for the services. Service keys act as internal DNS hostnames:
-
-```text
-roastcart-frontend
-      |
-      | http://roastcart-backend:5000
-      v
-roastcart-backend
-      |
-      | postgresql://postgres-db:5432
-      v
-postgres-db
-```
-
-Host port mappings are mainly for access from the local machine:
-
-```text
-localhost:5173 -> frontend:5173
-localhost:5000 -> backend:5000
-localhost:5432 -> postgres-db:5432
-```
-
-Container-to-container traffic should use service names and container ports rather than `localhost`.
-
-## Commands used
-
-Build and run the complete stack from the repository root:
+Build the services separately:
 
 ```bash
-docker compose up --build
+docker compose build roastcart-frontend
+docker compose build roastcart-backend
 ```
 
-Run in detached mode after verification:
+Start the stack:
 
 ```bash
-docker compose up --build -d
+docker compose up
 ```
 
-Check service state:
+Check running services:
 
 ```bash
 docker compose ps
 ```
 
-Check logs:
-
-```bash
-docker compose logs roastcart-frontend
-docker compose logs roastcart-backend
-docker compose logs postgres-db
-```
-
-Verify backend directly:
+Verify the backend directly:
 
 ```bash
 curl http://localhost:5000/api/v1/products
 ```
 
-Verify complete browser flow:
-
-```text
-http://localhost:5173
-```
-
-Stop the stack:
+Verify the same API through the Nginx reverse proxy:
 
 ```bash
-docker compose down
+curl http://localhost:3000/api/v1/products
 ```
 
-## Outcome
+Open the production frontend:
 
-RoastCart has progressed from partial containerisation to a fully containerised local platform. The presentation, application and database tiers can now be built and started together using a single Docker Compose command, creating a repeatable local environment that is ready for later production-image, CI/CD and cloud-deployment stages.
+```text
+http://localhost:3000
+```
+
+### Verified Outcome
+
+- Production frontend image builds successfully.
+- Nginx serves the compiled React/Vite frontend.
+- Products load correctly in the browser.
+- Flask remains reachable directly on port `5000` for development/testing.
+- Requests to `localhost:3000/api/...` are successfully proxied by Nginx to Flask.
+- Flask continues communicating with PostgreSQL using Docker service discovery.
+
+## Key Learning
+
+This milestone changes the frontend from a **development server container** into a **production-style web container**.
+
+```text
+Development: Node + Vite stay running
+Production:  Node + Vite build once -> Nginx stays running
+```
+
+It also introduces Nginx as a reverse proxy, giving the application a single browser-facing entry point while internal services continue communicating using Docker's private network.

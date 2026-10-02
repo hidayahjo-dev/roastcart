@@ -1,4 +1,7 @@
-# Docker compose: describes how to run multiple containers together in a shared default network
+# Docker compose:
+# describes how to run multiple containers together
+# on the shared default network
+
 services:
   # 1. Database Tier (Uses official pre-built image)
   postgres-db: # service key name --> used by Docker for internal service discovery and DNS routing b/w containers
@@ -31,7 +34,9 @@ services:
 
     environment:
       FLASK_DEBUG: "1"
-      # CRUCIAL DEVOPS CONCEPT: Inside the Docker network, we connect to the service name 'postgres-db', NOT 'localhost'
+      # CRUCIAL DEVOPS CONCEPT:
+      # Inside Docker, use the Compose service name
+      # instead of localhost.
       DATABASE_URL: postgresql+psycopg://${DB_USER}:${DB_PASSWORD}@postgres-db:5432/${DB_NAME}
     depends_on:
       - postgres-db
@@ -39,13 +44,15 @@ services:
   roastcart-frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
 
     container_name: roastcart_react_frontend
     restart: unless-stopped
 
     ports:
-      - "5173:5173"
+      # HOST:CONTAINER
+      # Browser -> localhost:3000 -> Nginx:80
+      - "3000:80"
     depends_on:
       - roastcart-backend
 
