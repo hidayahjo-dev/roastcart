@@ -17,11 +17,17 @@ services:
     volumes:
       - roastcart_postgres_data:/var/lib/postgresql/data
 
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # 2. Application Tier (Builds your custom Flask code)
   roastcart-backend:
     build:
       context: ./backend # -> context: files Docker can see during the build
-      dockerfile: Dockerfile # -> instructions Docker can use
+      dockerfile: Dockerfile.prod # -> instructions Docker can use
 
     container_name: roastcart_flask_backend
     restart: unless-stopped
@@ -33,13 +39,27 @@ services:
       - .env
 
     environment:
-      FLASK_DEBUG: "1"
+      FLASK_DEBUG: "0"
       # CRUCIAL DEVOPS CONCEPT:
       # Inside Docker, use the Compose service name
       # instead of localhost.
       DATABASE_URL: postgresql+psycopg://${DB_USER}:${DB_PASSWORD}@postgres-db:5432/${DB_NAME}
     depends_on:
-      - postgres-db
+      postgres-db:
+        condition: service_healthy
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/v1/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   roastcart-frontend:
     build:
@@ -54,7 +74,8 @@ services:
       # Browser -> localhost:3000 -> Nginx:80
       - "3000:80"
     depends_on:
-      - roastcart-backend
+      roastcart-backend:
+        condition: service_healthy
 
 volumes:
   roastcart_postgres_data:

@@ -1,0 +1,59 @@
+# Docker compose:
+# describes how to run multiple containers together
+# on the shared default network
+
+services:
+  # 1. Database Tier (Uses official pre-built image)
+  postgres-db: # service key name --> used by Docker for internal service discovery and DNS routing b/w containers
+    image: postgres:15-alpine
+    container_name: roastcart_db # this is human-readable container name for running commands in terminal
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - roastcart_postgres_data:/var/lib/postgresql/data
+
+  # 2. Application Tier (Builds your custom Flask code)
+  roastcart-backend:
+    build:
+      context: ./backend # -> context: files Docker can see during the build
+      dockerfile: Dockerfile.dev # -> instructions Docker can use
+
+    container_name: roastcart_flask_backend
+    restart: unless-stopped
+    ports:
+      # format-> HOST:CONTAINER
+      - "5000:5000"
+
+    env_file:
+      - .env
+
+    environment:
+      FLASK_DEBUG: "1"
+      # CRUCIAL DEVOPS CONCEPT:
+      # Inside Docker, use the Compose service name
+      # instead of localhost.
+      DATABASE_URL: postgresql+psycopg://${DB_USER}:${DB_PASSWORD}@postgres-db:5432/${DB_NAME}
+    depends_on:
+      - postgres-db
+
+  roastcart-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+
+    container_name: roastcart_react_frontend
+    restart: unless-stopped
+
+    ports:
+      # HOST:CONTAINER
+      - "3000:5173"
+    depends_on:
+      - roastcart-backend
+
+volumes:
+  roastcart_postgres_data:
