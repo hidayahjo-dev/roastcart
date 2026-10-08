@@ -1,14 +1,90 @@
-# RoastCart - CI + Azure Container Registry Milestone
+# RoastCart - CI/CD Artifact Pipeline with Azure Container Registry
 
 ## Milestone Summary
 
-RoastCart now has an automated Continuous Integration (CI) workflow that validates production container builds before changes reach `main`, then publishes immutable, traceable container images to Azure Container Registry (ACR) after a successful merge.
+RoastCart now has an automated **Continuous Integration (CI) + Continuous Delivery (CD)** artifact pipeline using GitHub Actions and Azure Container Registry (ACR).
 
-This milestone moves RoastCart from **manual local Docker builds** to a **repeatable cloud artifact pipeline**.
+This milestone moves RoastCart from manually building production containers on a developer machine to automatically:
+
+1. verifying production Docker builds on Pull Requests into `main`;
+2. rebuilding approved production images after changes reach `main`;
+3. tagging those images with the exact Git commit SHA; and
+4. publishing the immutable images to Azure Container Registry.
+
+> In this milestone, **CD means Continuous Delivery**, not Continuous Deployment. The images are delivered to ACR and are ready for deployment, but they are not yet automatically deployed to a runtime such as Azure Container Apps.
+
+---
+
+## CI vs Continuous Delivery
+
+### Continuous Integration
+
+The CI portion answers:
+
+> Can this code change safely produce valid production container images?
+
+For Pull Requests into `main`:
+
+```text
+feature branch
+    |
+    v
+Pull Request -> main
+    |
+    v
+GitHub Actions
+    |
+    +-- Build backend production image
+    `-- Build frontend production image
+```
+
+The build runs on a clean GitHub-hosted Ubuntu runner.
+
+No production artifact is published from the feature branch.
+
+### Continuous Delivery
+
+The Continuous Delivery portion answers:
+
+> After a change is accepted into `main`, can I automatically produce a versioned artifact that is ready to deploy?
+
+```text
+merge / push -> main
+        |
+        v
+      verify
+        |
+        v
+      publish
+        |
+        +-- GitHub OIDC authentication
+        +-- Azure / ACR authentication
+        +-- Build backend image
+        +-- Build frontend image
+        +-- Tag with Git commit SHA
+        `-- Push to ACR
+```
+
+Result:
+
+```text
+acrroastcart26.azurecr.io/
+├── roastcart-backend:<git-sha>
+└── roastcart-frontend:<git-sha>
+```
+
+This is **Continuous Delivery** because deployable artifacts are automatically produced and stored after approved code reaches `main`.
+
+It is **not yet Continuous Deployment** because nothing automatically rolls those images out to a running Azure environment.
+
+---
 
 ## Architecture
 
 ```text
+Developer
+    |
+    v
 Feature Branch
     |
     v
@@ -17,65 +93,90 @@ Pull Request -> main
     v
 GitHub Actions
     |
-    +-- Verify backend production image
-    +-- Verify frontend production image
-    |
-    v
-Merge to main
-    |
-    v
+    +-------------------------------+
+    | Continuous Integration       |
+    | - checkout source             |
+    | - build backend image         |
+    | - build frontend image        |
+    | - fail PR if build fails      |
+    +---------------+---------------+
+                    |
+                 merge
+                    |
+                    v
+                  main
+                    |
+                    v
 GitHub Actions
     |
-    +-- Verify again
-    +-- Authenticate to Azure with OIDC
-    +-- Authenticate Docker to ACR
-    +-- Build production images
-    +-- Tag images with Git commit SHA
-    +-- Push images to ACR
-              |
-              v
-     acrroastcart26.azurecr.io
-       |-- roastcart-backend:<git-sha>
-       `-- roastcart-frontend:<git-sha>
+    +-------------------------------+
+    | Continuous Delivery          |
+    | - verify again                |
+    | - authenticate with OIDC      |
+    | - login to ACR                |
+    | - build production images     |
+    | - tag with github.sha         |
+    | - push images to ACR          |
+    +---------------+---------------+
+                    |
+                    v
+          Azure Container Registry
+                  Basic
+                    |
+          +---------+---------+
+          |                   |
+          v                   v
+roastcart-backend:<sha>  roastcart-frontend:<sha>
 ```
+
+---
 
 ## What This Milestone Demonstrates
 
-- GitHub Actions CI triggered by Pull Requests into `main`
-- Production Docker image verification on clean GitHub-hosted runners
-- Separate verification and publishing jobs
-- Job dependency using `needs: verify`
-- Publishing restricted to `push` events on `main`
-- Passwordless GitHub-to-Azure authentication using OpenID Connect (OIDC)
-- Microsoft Entra application and service principal identity
-- Least-privilege `AcrPush` authorization scoped to ACR
-- Temporary ACR access-token authentication
-- Immutable container image tagging using `${{ github.sha }}`
-- Container image storage in Azure Container Registry Basic SKU
+- GitHub Actions workflow triggers
+- Pull Request based CI verification
+- Separate `verify` and `publish` jobs
+- Sequential job dependency using `needs: verify`
+- GitHub-hosted clean build runners
+- Production Docker image verification
+- Continuous Delivery of deployable container artifacts
+- GitHub OIDC authentication to Microsoft Entra ID
+- Entra application and service principal identity
+- Federated credential trust
+- Least-privilege Azure RBAC
+- `AcrPush` scoped to the registry
+- Temporary ACR access tokens
+- Docker login to a private container registry
+- Git SHA image versioning
 - Source-to-artifact traceability
+- Azure Container Registry Basic SKU
+- Azure Student region-policy awareness
 
-## CI Behaviour
+---
+
+## Current GitHub Actions Behaviour
 
 ### Pull Request into `main`
 
 ```text
-feature branch
+pull_request
     |
     v
-Pull Request
+verify
     |
-    v
-Verify Production Builds
-    |-- backend/Dockerfile.prod
+    +-- backend/Dockerfile.prod
     `-- frontend/Dockerfile.prod
+    |
+    v
+PASS / FAIL
 ```
 
-The PR verifies that both production images can be built successfully. Images are not published from a feature branch.
+`publish` is skipped.
 
-### Merge / Push to `main`
+### Push / Merge into `main`
 
 ```text
-main updated
+push -> main
     |
     v
 verify
@@ -83,64 +184,60 @@ verify
     v
 publish
     |
-    +-- Azure OIDC login
-    +-- ACR login
-    +-- backend image:<git-sha>
-    `-- frontend image:<git-sha>
+    +-- Azure login through OIDC
+    +-- temporary ACR token
+    +-- Docker login
+    +-- backend:<github.sha>
+    `-- frontend:<github.sha>
 ```
 
-Only `main` creates persistent release artifacts.
+---
 
-## Why PostgreSQL Is Not Built in CI
+## Why Git SHA Tags Are Used
 
-The RoastCart PostgreSQL service uses the official pre-built image:
+Instead of relying only on:
+
+```text
+latest
+```
+
+RoastCart publishes:
+
+```text
+roastcart-backend:<git-sha>
+roastcart-frontend:<git-sha>
+```
+
+This provides:
+
+- exact source traceability;
+- immutable deployment references;
+- simpler rollback;
+- reproducible release identification.
+
+A normal merge may create a new merge commit on `main`, so the ACR tag can be the `main` merge commit SHA rather than the final feature-branch SHA.
+
+---
+
+## Why PostgreSQL Is Not Built or Published
+
+RoastCart uses the official PostgreSQL image:
 
 ```yaml
 image: postgres:15-alpine
 ```
 
-RoastCart owns and builds only:
-
-- `backend/Dockerfile.prod`
-- `frontend/Dockerfile.prod`
-
-PostgreSQL can later be pulled and started during integration testing, but it does not require a custom `docker build` step.
-
-## ACR
-
-Registry:
+Therefore:
 
 ```text
-<ACR_NAME>.azurecr.io
+backend   -> custom Dockerfile -> build -> publish to ACR
+frontend  -> custom Dockerfile -> build -> publish to ACR
+postgres  -> official image    -> pull when needed
 ```
 
-SKU:
+PostgreSQL can later participate in integration testing or be replaced by Azure Database for PostgreSQL, but RoastCart does not own a PostgreSQL image that needs to be built.
 
-```text
-Basic
-```
-
-Region:
-
-```text
-Malaysia West
-```
-
-Repositories:
-
-```text
-roastcart-backend
-roastcart-frontend
-```
-
-Images are tagged with the full Git commit SHA rather than only `latest`.
-
-Example:
-
-```text
-<ACR_NAME>.azurecr.io/roastcart-backend:<git-sha>
-<ACR_NAME>.azurecr.io/roastcart-frontend:<git-sha>
-```
+---
 
 ## Verification Commands
 
@@ -170,7 +267,7 @@ az acr repository show-tags \
   --output table
 ```
 
-Compare the current local `main` SHA:
+Compare the `main` source SHA:
 
 ```bash
 git checkout main
@@ -178,25 +275,39 @@ git pull origin main
 git rev-parse HEAD
 ```
 
-The resulting SHA should match the ACR image tag created by the corresponding GitHub Actions run.
+---
 
-## Key Learning Outcome
+## Milestone Outcome
 
-The workflow evolved from:
-
-```text
-docker build -t ...
-docker images
-```
-
-performed manually on a developer machine, into:
+RoastCart now has a working **CI/CD artifact pipeline**:
 
 ```text
-Pull Request -> automated verification -> merge -> reproducible build -> immutable artifact -> ACR
+Source
+  |
+  v
+CI verification
+  |
+  v
+Approved main commit
+  |
+  v
+Continuous Delivery
+  |
+  v
+Immutable SHA-tagged container artifacts
+  |
+  v
+Azure Container Registry
 ```
 
-This establishes the artifact pipeline that future RoastCart deployment stages can consume without rebuilding source code on the destination platform.
+The application is not yet continuously deployed.
+
+---
 
 ## Next Milestone
 
-Provision RoastCart cloud infrastructure as code and deploy the SHA-tagged ACR images to Azure, while keeping Azure Student subscription cost and regional policy constraints in mind.
+The next pain point is:
+
+> The production images now exist in ACR, but the Azure infrastructure that will run them still needs to be created reproducibly.
+
+The next recommended milestone is therefore **Infrastructure as Code with Terraform**, followed by deploying the existing SHA-tagged images to a cost-conscious Azure runtime.
