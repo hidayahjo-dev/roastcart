@@ -68,7 +68,7 @@ merge / push -> main
 Result:
 
 ```text
-acrroastcart26.azurecr.io/
+<ACR_NAME>.azurecr.io/
 ├── roastcart-backend:<git-sha>
 └── roastcart-frontend:<git-sha>
 ```
