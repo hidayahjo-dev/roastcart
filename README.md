@@ -1,313 +1,97 @@
-# RoastCart - CI/CD Artifact Pipeline with Azure Container Registry
+# RoastCart — Milestone 3: Azure PostgreSQL Migration
 
-## Milestone Summary
+**Branch:** `feature/azure-postgres`  
+**Status:** Completed — database restored and hybrid connectivity verified  
+**Focus:** Azure managed database, PostgreSQL migration, networking, configuration, and operational cost control
 
-RoastCart now has an automated **Continuous Integration (CI) + Continuous Delivery (CD)** artifact pipeline using GitHub Actions and Azure Container Registry (ACR).
+## Objective
 
-This milestone moves RoastCart from manually building production containers on a developer machine to automatically:
-
-1. verifying production Docker builds on Pull Requests into `main`;
-2. rebuilding approved production images after changes reach `main`;
-3. tagging those images with the exact Git commit SHA; and
-4. publishing the immutable images to Azure Container Registry.
-
-> In this milestone, **CD means Continuous Delivery**, not Continuous Deployment. The images are delivered to ACR and are ready for deployment, but they are not yet automatically deployed to a runtime such as Azure Container Apps.
-
----
-
-## CI vs Continuous Delivery
-
-### Continuous Integration
-
-The CI portion answers:
-
-> Can this code change safely produce valid production container images?
-
-For Pull Requests into `main`:
-
-```text
-feature branch
-    |
-    v
-Pull Request -> main
-    |
-    v
-GitHub Actions
-    |
-    +-- Build backend production image
-    `-- Build frontend production image
-```
-
-The build runs on a clean GitHub-hosted Ubuntu runner.
-
-No production artifact is published from the feature branch.
-
-### Continuous Delivery
-
-The Continuous Delivery portion answers:
-
-> After a change is accepted into `main`, can I automatically produce a versioned artifact that is ready to deploy?
-
-```text
-merge / push -> main
-        |
-        v
-      verify
-        |
-        v
-      publish
-        |
-        +-- GitHub OIDC authentication
-        +-- Azure / ACR authentication
-        +-- Build backend image
-        +-- Build frontend image
-        +-- Tag with Git commit SHA
-        `-- Push to ACR
-```
-
-Result:
-
-```text
-<ACR_NAME>.azurecr.io/
-├── roastcart-backend:<git-sha>
-└── roastcart-frontend:<git-sha>
-```
-
-This is **Continuous Delivery** because deployable artifacts are automatically produced and stored after approved code reaches `main`.
-
-It is **not yet Continuous Deployment** because nothing automatically rolls those images out to a running Azure environment.
-
----
+Migrate RoastCart's existing PostgreSQL database from a Docker-managed local container and named volume into **Azure Database for PostgreSQL Flexible Server**, while continuing to run the production-built React/Nginx and Flask/Gunicorn containers locally. Validate the full application path before deploying the application itself to Azure Container Apps (ACA).
 
 ## Architecture
 
-```text
-Developer
-    |
-    v
-Feature Branch
-    |
-    v
-Pull Request -> main
-    |
-    v
-GitHub Actions
-    |
-    +-------------------------------+
-    | Continuous Integration       |
-    | - checkout source             |
-    | - build backend image         |
-    | - build frontend image        |
-    | - fail PR if build fails      |
-    +---------------+---------------+
-                    |
-                 merge
-                    |
-                    v
-                  main
-                    |
-                    v
-GitHub Actions
-    |
-    +-------------------------------+
-    | Continuous Delivery          |
-    | - verify again                |
-    | - authenticate with OIDC      |
-    | - login to ACR                |
-    | - build production images     |
-    | - tag with github.sha         |
-    | - push images to ACR          |
-    +---------------+---------------+
-                    |
-                    v
-          Azure Container Registry
-                  Basic
-                    |
-          +---------+---------+
-          |                   |
-          v                   v
-roastcart-backend:<sha>  roastcart-frontend:<sha>
+```mermaid
+flowchart TB
+  subgraph Local[MacBook — Docker Compose hybrid test]
+    Browser[Browser / curl] --> FE[React static build + Nginx\nlocalhost:3000]
+    FE -->|/api reverse proxy| BE[Flask + Gunicorn\nlocalhost:5000]
+  end
+  BE -->|PostgreSQL over TLS :5432| DB[(Azure Database for PostgreSQL\nFlexible Server: roastcart / products)]
+  ACR[Azure Container Registry\nGit-SHA-tagged frontend/backend images] -.->|Next milestone: ACA| ACA[Azure Container Apps]
+  ACA -.-> DB
 ```
 
----
+**Before:** Docker Compose runs frontend + backend + `postgres-db`; a named volume preserves live PostgreSQL data.  
+**After:** `docker-compose.azure-test.yml` runs frontend + backend locally; PostgreSQL is hosted in Azure. The original fully local Compose setup is retained for isolated development and regression tests.
 
-## What This Milestone Demonstrates
+## What was implemented
 
-- GitHub Actions workflow triggers
-- Pull Request based CI verification
-- Separate `verify` and `publish` jobs
-- Sequential job dependency using `needs: verify`
-- GitHub-hosted clean build runners
-- Production Docker image verification
-- Continuous Delivery of deployable container artifacts
-- GitHub OIDC authentication to Microsoft Entra ID
-- Entra application and service principal identity
-- Federated credential trust
-- Least-privilege Azure RBAC
-- `AcrPush` scoped to the registry
-- Temporary ACR access tokens
-- Docker login to a private container registry
-- Git SHA image versioning
-- Source-to-artifact traceability
-- Azure Container Registry Basic SKU
-- Azure Student region-policy awareness
+- Provisioned Azure Database for PostgreSQL Flexible Server and created a `roastcart` application database.
+- Exported the existing local database using `pg_dump` from the running `postgres:15-alpine` container; restored schema and product records with `pg_restore`.
+- Connected to Azure using a **temporary PostgreSQL client container**, avoiding a native PostgreSQL installation on macOS.
+- Used the Azure server hostname and TLS-enabled SQLAlchemy/psycopg connection string in a separate Git-ignored `.env.azure` file.
+- Added an isolated `docker-compose.azure-test.yml` containing **only** the React/Nginx and Flask/Gunicorn services (no local PostgreSQL service, volume, or DB `depends_on`).
+- Confirmed local Nginx-to-Flask communication still works over the Compose network while Flask queries Azure PostgreSQL.
+- Stopped the hybrid containers and Azure PostgreSQL server after testing to limit compute usage.
 
----
+## Verification evidence
 
-## Current GitHub Actions Behaviour
-
-### Pull Request into `main`
-
-```text
-pull_request
-    |
-    v
-verify
-    |
-    +-- backend/Dockerfile.prod
-    `-- frontend/Dockerfile.prod
-    |
-    v
-PASS / FAIL
-```
-
-`publish` is skipped.
-
-### Push / Merge into `main`
-
-```text
-push -> main
-    |
-    v
-verify
-    |
-    v
-publish
-    |
-    +-- Azure login through OIDC
-    +-- temporary ACR token
-    +-- Docker login
-    +-- backend:<github.sha>
-    `-- frontend:<github.sha>
-```
-
----
-
-## Why Git SHA Tags Are Used
-
-Instead of relying only on:
-
-```text
-latest
-```
-
-RoastCart publishes:
-
-```text
-roastcart-backend:<git-sha>
-roastcart-frontend:<git-sha>
-```
-
-This provides:
-
-- exact source traceability;
-- immutable deployment references;
-- simpler rollback;
-- reproducible release identification.
-
-A normal merge may create a new merge commit on `main`, so the ACR tag can be the `main` merge commit SHA rather than the final feature-branch SHA.
-
----
-
-## Why PostgreSQL Is Not Built or Published
-
-RoastCart uses the official PostgreSQL image:
-
-```yaml
-image: postgres:15-alpine
-```
-
-Therefore:
-
-```text
-backend   -> custom Dockerfile -> build -> publish to ACR
-frontend  -> custom Dockerfile -> build -> publish to ACR
-postgres  -> official image    -> pull when needed
-```
-
-PostgreSQL can later participate in integration testing or be replaced by Azure Database for PostgreSQL, but RoastCart does not own a PostgreSQL image that needs to be built.
-
----
-
-## Verification Commands
-
-List repositories:
+Commands completed successfully:
 
 ```bash
-az acr repository list \
-  --name <ACR_NAME> \
-  --output table
+docker compose -f docker-compose.azure-test.yml ps
+curl http://localhost:5000/api/v1/health
+curl http://localhost:5000/api/v1/products
+curl http://localhost:3000/api/v1/products
+
+docker exec roastcart_flask_backend python -c \
+  'import os; from sqlalchemy.engine import make_url; print(make_url(os.environ["DATABASE_URL"]).host)'
 ```
 
-Show backend tags:
+**Observed:** Only the frontend and backend local containers were running; API requests returned the expected restored coffee products; the backend's active `DATABASE_URL` hostname matched the new Azure PostgreSQL endpoint. A passing `/health` check validates only what that endpoint checks; the product endpoint is the database-dependent test.
+
+## Key learning points
+
+| Concept                      | Understanding demonstrated                                                                                                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Docker named volume          | Persists **live** database files across container recreation; `docker compose down` preserves named volumes unless removed explicitly.                                           |
+| Logical backup               | `pg_dump -Fc` produces a point-in-time, portable archive; it is **not** a live volume or continuous synchronization.                                                             |
+| Database vs. table           | `CREATE DATABASE roastcart` creates the database; `pg_restore` reconstructs its tables, indexes, constraints, and records.                                                       |
+| PostgreSQL client vs. server | `docker run postgres:15-alpine psql ...` runs an ephemeral **client**, not another database server.                                                                              |
+| Hybrid cloud testing         | Local production-built app containers validate connectivity to an external managed database before full ACA deployment.                                                          |
+| Configuration injection      | `--env-file .env.azure` provides **Compose interpolation** values; `environment: DATABASE_URL: ${DATABASE_URL:?...}` injects the chosen value into Flask.                        |
+| Health and readiness         | Application responsiveness does not automatically prove database availability.                                                                                                   |
+| Cost control                 | Stopping Flexible Server stops compute charges; provisioned storage and applicable backup charges can remain. Azure can automatically restart a stopped server after seven days. |
+
+## Run the hybrid test again
+
+Store your actual connection string **outside Git** in `.env.azure`:
+
+```dotenv
+DATABASE_URL='postgresql+psycopg://APP_USER:URL_ENCODED_PASSWORD@YOUR_SERVER.postgres.database.azure.com:5432/roastcart?sslmode=require'
+```
 
 ```bash
-az acr repository show-tags \
-  --name <ACR_NAME> \
-  --repository roastcart-backend \
-  --output table
+# Start the Azure PostgreSQL server first (replace placeholders).
+az postgres flexible-server start -g YOUR_RESOURCE_GROUP -n YOUR_SERVER
+
+# From the RoastCart repo root; stop any overlapping local stack first.
+docker compose -f docker-compose.prod.yml down   # if it is running; do NOT add -v
+
+docker compose --env-file .env.azure -f docker-compose.azure-test.yml config --quiet
+docker compose --env-file .env.azure -f docker-compose.azure-test.yml up -d --build
+curl http://localhost:5000/api/v1/products
+curl http://localhost:3000/api/v1/products
+
+# Shut down test containers and cloud DB when finished.
+docker compose -f docker-compose.azure-test.yml down
+az postgres flexible-server stop -g YOUR_RESOURCE_GROUP -n YOUR_SERVER
 ```
 
-Show frontend tags:
+> **Security:** Do not commit `.env.azure`, `.env`, database dumps, or real credentials. Use restricted firewall rules and TLS for the hybrid stage. Production ACA will use environment settings/secrets and preferably a least-privileged application DB role; `sslmode=verify-full` with certificate validation is the stronger production TLS posture.
 
-```bash
-az acr repository show-tags \
-  --name <ACR_NAME> \
-  --repository roastcart-frontend \
-  --output table
-```
+## Scope and next milestone
 
-Compare the `main` source SHA:
+This milestone validates the initial one-time database migration and hybrid connectivity. It does **not** provision or deploy ACA, configure Key Vault/managed identity, or introduce automatic schema evolution. Future table/column changes should use versioned migrations (e.g., Alembic), not overwriting Azure with another local dump.
 
-```bash
-git checkout main
-git pull origin main
-git rev-parse HEAD
-```
-
----
-
-## Milestone Outcome
-
-RoastCart now has a working **CI/CD artifact pipeline**:
-
-```text
-Source
-  |
-  v
-CI verification
-  |
-  v
-Approved main commit
-  |
-  v
-Continuous Delivery
-  |
-  v
-Immutable SHA-tagged container artifacts
-  |
-  v
-Azure Container Registry
-```
-
-The application is not yet continuously deployed.
-
----
-
-## Next Milestone
-
-The next pain point is:
-
-> The production images now exist in ACR, but the Azure infrastructure that will run them still needs to be created reproducibly.
-
-The next recommended milestone is therefore **Infrastructure as Code with Terraform**, followed by deploying the existing SHA-tagged images to a cost-conscious Azure runtime.
+**Next:** `feature/azure-container-apps` — run the existing SHA-tagged production images from ACR on ACA, configure ingress/upstream routing, secure the database connection, and automate deployment after manual verification.

@@ -1,0 +1,46 @@
+# Hybrid integration testing:
+# React + Flask run locally, PostgreSQL runs on Azure.
+
+services:
+  roastcart-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+
+    container_name: roastcart_flask_backend
+    restart: "no"
+
+    ports:
+      - "5000:5000"
+
+    environment:
+      FLASK_DEBUG: "0"
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be configured}
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/v1/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  roastcart-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+
+    container_name: roastcart_react_frontend
+    restart: "no"
+
+    ports:
+      - "3000:80"
+
+    depends_on:
+      roastcart-backend:
+        condition: service_healthy
