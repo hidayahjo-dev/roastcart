@@ -1,8 +1,19 @@
-# RoastCart — Milestone 3: Azure PostgreSQL Migration
+# RoastCart — Milestone: Azure PostgreSQL Migration
 
 **Branch:** `feature/azure-postgres`  
 **Status:** Completed — database restored and hybrid connectivity verified  
 **Focus:** Azure managed database, PostgreSQL migration, networking, configuration, and operational cost control
+
+### Cloud Networking and Secure Database Connectivity
+
+- Transitioned Flask database communication from Docker's internal service-name DNS (`postgres-db`) to the Azure PostgreSQL managed service endpoint.
+- Established outbound PostgreSQL connectivity over TCP port `5432` from a locally running Flask container to Azure.
+- Used Azure PostgreSQL public networking with firewall-controlled access for hybrid integration testing.
+- Configured TLS-encrypted PostgreSQL connections using `sslmode=require`.
+- Externalized the database connection string using Docker Compose environment-variable interpolation, allowing the same application image to connect to different database environments.
+- Verified cloud connectivity and application functionality through SQL queries, Flask API endpoints, and Nginx reverse-proxy requests.
+
+**Scope:** This milestone demonstrates public endpoint connectivity, database access controls, DNS resolution, and TLS encryption. Azure VNet integration, private endpoints, and more advanced network security configurations are reserved for subsequent deployment milestones.
 
 ## Objective
 
