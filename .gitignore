@@ -23,6 +23,6 @@ frontend/dist/
 .vscode/
 .idea/
 
-# Backups
-backups/
+# DB backups
+/backups/
 

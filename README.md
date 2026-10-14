@@ -151,7 +151,7 @@ PostgreSQL Container
 
 This will allow the full application stack to run through Docker Compose.
 
----
+## What was implemented
 
 ## Running the Containerised Services
 
