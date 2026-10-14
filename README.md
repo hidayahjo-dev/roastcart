@@ -1,97 +1,309 @@
-# RoastCart — Milestone 3: Azure PostgreSQL Migration
+# RoastCart
 
-**Branch:** `feature/azure-postgres`  
-**Status:** Completed — database restored and hybrid connectivity verified  
-**Focus:** Azure managed database, PostgreSQL migration, networking, configuration, and operational cost control
+RoastCart is a minimal e-commerce web application built as a personal **Cloud & DevOps learning project**.
 
-## Objective
+The application itself is intentionally kept simple so that the main focus can remain on the infrastructure, containerisation, deployment, CI/CD, cloud architecture, monitoring, and operational practices surrounding a modern three-tier web application.
 
-Migrate RoastCart's existing PostgreSQL database from a Docker-managed local container and named volume into **Azure Database for PostgreSQL Flexible Server**, while continuing to run the production-built React/Nginx and Flask/Gunicorn containers locally. Validate the full application path before deploying the application itself to Azure Container Apps (ACA).
+## Project Status
+
+**In Development**
+
+Current focus:
+
+> Completing the fully containerised local application stack before progressing toward cloud deployment and CI/CD automation.
+
+---
+
+The project follows a progressive approach:
+
+**Local development → Containers → Multi-container orchestration → Cloud deployment → CI/CD → Infrastructure automation → Monitoring**
+
+---
+
+## Project Objectives
+
+The main objectives of RoastCart are to:
+
+- Build and operate a simple three-tier web application.
+- Apply Docker containerisation to individual application components.
+- Understand service-to-service networking using Docker Compose.
+- Deploy containerised workloads to Microsoft Azure.
+- Implement CI/CD workflows for automated build and deployment.
+- Explore Infrastructure as Code and cloud automation.
+- Apply monitoring, logging, security, and operational practices.
+- Document architectural decisions and learning milestones.
+
+The application domain is intentionally lightweight: a coffee storefront where users can browse coffee products and filter or search the available catalogue.
+
+---
 
 ## Architecture
 
-```mermaid
-flowchart TB
-  subgraph Local[MacBook — Docker Compose hybrid test]
-    Browser[Browser / curl] --> FE[React static build + Nginx\nlocalhost:3000]
-    FE -->|/api reverse proxy| BE[Flask + Gunicorn\nlocalhost:5000]
-  end
-  BE -->|PostgreSQL over TLS :5432| DB[(Azure Database for PostgreSQL\nFlexible Server: roastcart / products)]
-  ACR[Azure Container Registry\nGit-SHA-tagged frontend/backend images] -.->|Next milestone: ACA| ACA[Azure Container Apps]
-  ACA -.-> DB
+RoastCart currently follows a three-tier architecture:
+
+```text
+┌─────────────────────┐
+│   React Frontend    │
+│       (Vite)        │
+└──────────┬──────────┘
+           │ HTTP / API
+           ▼
+┌─────────────────────┐
+│    Flask Backend    │
+│      REST API       │
+└──────────┬──────────┘
+           │ SQLAlchemy
+           ▼
+┌─────────────────────┐
+│     PostgreSQL      │
+│      Database       │
+└─────────────────────┘
 ```
 
-**Before:** Docker Compose runs frontend + backend + `postgres-db`; a named volume preserves live PostgreSQL data.  
-**After:** `docker-compose.azure-test.yml` runs frontend + backend locally; PostgreSQL is hosted in Azure. The original fully local Compose setup is retained for isolated development and regression tests.
+During local containerised development, Docker Compose manages the application services and provides a shared Docker network for communication between containers.
+
+---
+
+## Technology Stack
+
+| Area | Technology |
+|---|---|
+| Frontend | React, Vite, JavaScript |
+| Backend | Python, Flask |
+| API | REST |
+| ORM | SQLAlchemy |
+| Database | PostgreSQL |
+| Containerisation | Docker |
+| Local orchestration | Docker Compose |
+| Cloud Platform | Microsoft Azure |
+| Version Control | Git, GitHub |
+| CI/CD | Planned |
+| Infrastructure as Code | Planned |
+| Monitoring | Planned |
+
+---
+
+## Current Features
+
+The current application supports a minimal coffee product catalogue.
+
+### Product API
+
+The Flask backend provides endpoints for managing coffee products, including:
+
+- Retrieve products
+- Create products
+- Update products
+- Soft-delete products
+
+The data model is intentionally simple so that additional functionality can be introduced later, such as:
+
+- Orders
+- Reviews
+- Customers
+- Inventory
+- Authentication
+
+---
+
+## Current Development Progress
+
+### Completed
+
+- React frontend created
+- Flask REST API created
+- PostgreSQL database integrated
+- Product CRUD functionality implemented
+- React frontend connected to Flask API
+- PostgreSQL containerised
+- Flask backend containerised
+- Docker Compose configured
+- Backend and PostgreSQL communicating through a shared Docker network
+- Native React frontend successfully communicating with the containerised backend
+
+### Current Milestone
+
+The project is currently transitioning from a partially containerised architecture to a fully containerised local application.
+
+```text
+Current
+
+React (Local)
+      │
+      ▼
+Flask Container
+      │
+      ▼
+PostgreSQL Container
+```
+
+The next immediate milestone is:
+
+```text
+React Container
+      │
+      ▼
+Flask Container
+      │
+      ▼
+PostgreSQL Container
+```
+
+This will allow the full application stack to run through Docker Compose.
 
 ## What was implemented
 
-- Provisioned Azure Database for PostgreSQL Flexible Server and created a `roastcart` application database.
-- Exported the existing local database using `pg_dump` from the running `postgres:15-alpine` container; restored schema and product records with `pg_restore`.
-- Connected to Azure using a **temporary PostgreSQL client container**, avoiding a native PostgreSQL installation on macOS.
-- Used the Azure server hostname and TLS-enabled SQLAlchemy/psycopg connection string in a separate Git-ignored `.env.azure` file.
-- Added an isolated `docker-compose.azure-test.yml` containing **only** the React/Nginx and Flask/Gunicorn services (no local PostgreSQL service, volume, or DB `depends_on`).
-- Confirmed local Nginx-to-Flask communication still works over the Compose network while Flask queries Azure PostgreSQL.
-- Stopped the hybrid containers and Azure PostgreSQL server after testing to limit compute usage.
+## Running the Containerised Services
 
-## Verification evidence
-
-Commands completed successfully:
+Start the services:
 
 ```bash
-docker compose -f docker-compose.azure-test.yml ps
-curl http://localhost:5000/api/v1/health
-curl http://localhost:5000/api/v1/products
-curl http://localhost:3000/api/v1/products
-
-docker exec roastcart_flask_backend python -c \
-  'import os; from sqlalchemy.engine import make_url; print(make_url(os.environ["DATABASE_URL"]).host)'
+docker compose up --build
 ```
 
-**Observed:** Only the frontend and backend local containers were running; API requests returned the expected restored coffee products; the backend's active `DATABASE_URL` hostname matched the new Azure PostgreSQL endpoint. A passing `/health` check validates only what that endpoint checks; the product endpoint is the database-dependent test.
-
-## Key learning points
-
-| Concept                      | Understanding demonstrated                                                                                                                                                       |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Docker named volume          | Persists **live** database files across container recreation; `docker compose down` preserves named volumes unless removed explicitly.                                           |
-| Logical backup               | `pg_dump -Fc` produces a point-in-time, portable archive; it is **not** a live volume or continuous synchronization.                                                             |
-| Database vs. table           | `CREATE DATABASE roastcart` creates the database; `pg_restore` reconstructs its tables, indexes, constraints, and records.                                                       |
-| PostgreSQL client vs. server | `docker run postgres:15-alpine psql ...` runs an ephemeral **client**, not another database server.                                                                              |
-| Hybrid cloud testing         | Local production-built app containers validate connectivity to an external managed database before full ACA deployment.                                                          |
-| Configuration injection      | `--env-file .env.azure` provides **Compose interpolation** values; `environment: DATABASE_URL: ${DATABASE_URL:?...}` injects the chosen value into Flask.                        |
-| Health and readiness         | Application responsiveness does not automatically prove database availability.                                                                                                   |
-| Cost control                 | Stopping Flexible Server stops compute charges; provisioned storage and applicable backup charges can remain. Azure can automatically restart a stopped server after seven days. |
-
-## Run the hybrid test again
-
-Store your actual connection string **outside Git** in `.env.azure`:
-
-```dotenv
-DATABASE_URL='postgresql+psycopg://APP_USER:URL_ENCODED_PASSWORD@YOUR_SERVER.postgres.database.azure.com:5432/roastcart?sslmode=require'
-```
+View running containers:
 
 ```bash
-# Start the Azure PostgreSQL server first (replace placeholders).
-az postgres flexible-server start -g YOUR_RESOURCE_GROUP -n YOUR_SERVER
-
-# From the RoastCart repo root; stop any overlapping local stack first.
-docker compose -f docker-compose.prod.yml down   # if it is running; do NOT add -v
-
-docker compose --env-file .env.azure -f docker-compose.azure-test.yml config --quiet
-docker compose --env-file .env.azure -f docker-compose.azure-test.yml up -d --build
-curl http://localhost:5000/api/v1/products
-curl http://localhost:3000/api/v1/products
-
-# Shut down test containers and cloud DB when finished.
-docker compose -f docker-compose.azure-test.yml down
-az postgres flexible-server stop -g YOUR_RESOURCE_GROUP -n YOUR_SERVER
+docker compose ps
 ```
 
-> **Security:** Do not commit `.env.azure`, `.env`, database dumps, or real credentials. Use restricted firewall rules and TLS for the hybrid stage. Production ACA will use environment settings/secrets and preferably a least-privileged application DB role; `sslmode=verify-full` with certificate validation is the stronger production TLS posture.
+View logs:
 
-## Scope and next milestone
+```bash
+docker compose logs
+```
 
-This milestone validates the initial one-time database migration and hybrid connectivity. It does **not** provision or deploy ACA, configure Key Vault/managed identity, or introduce automatic schema evolution. Future table/column changes should use versioned migrations (e.g., Alembic), not overwriting Azure with another local dump.
+Stop the environment:
 
-**Next:** `feature/azure-container-apps` — run the existing SHA-tagged production images from ACR on ACA, configure ingress/upstream routing, secure the database connection, and automate deployment after manual verification.
+```bash
+docker compose down
+```
+
+Remove containers and associated volumes when a full reset is required:
+
+```bash
+docker compose down -v
+```
+
+---
+
+## Docker Networking
+
+Docker Compose creates a shared network that allows containers to communicate using their **service names** instead of `localhost`.
+
+For example:
+
+```text
+Flask
+  │
+  │ postgresql://...@postgres-db:5432/...
+  ▼
+postgres-db
+```
+
+Inside a container:
+The Flask application connects to PostgreSQL using the database service name defined in `docker-compose.yml`.
+
+This is one of the key learning milestones of the project: moving from host-based application communication to service-based container networking.
+
+---
+
+## Project Structure
+
+The project is organised around independently manageable application components.
+
+```text
+RoastCart/
+├── frontend/
+│   └── React application
+│
+├── backend/
+│   └── Flask REST API
+│
+├── docs/
+│   └── Architecture decisions and project documentation
+│
+├── docker-compose.yml
+├── README.md
+└── .env
+```
+
+The structure is designed to allow each component to be developed, containerised, deployed, and scaled independently.
+
+---
+
+## Planned Cloud & DevOps Roadmap
+
+The application will progressively move through the following stages:
+
+```text
+Application Development
+        │
+        ▼
+Containerisation
+        │
+        ▼
+Docker Compose
+        │
+        ▼
+Azure Container Registry
+        │
+        ▼
+Azure Deployment
+        │
+        ▼
+CI/CD Pipeline
+        │
+        ▼
+Infrastructure as Code
+        │
+        ▼
+Monitoring & Logging
+```
+
+Future areas of exploration include:
+
+- Azure-hosted frontend and backend
+- Managed PostgreSQL
+- Azure Container Registry
+- GitHub Actions
+- Automated container builds
+- Automated deployments
+- Terraform
+- Application monitoring
+- Logging and observability
+- Secrets management
+- Cloud networking
+- Scaling and availability
+
+---
+
+## Learning Focus
+
+RoastCart is primarily an engineering learning project rather than a feature-heavy e-commerce platform.
+
+The focus is on understanding the complete lifecycle of an application:
+
+```text
+Code
+ ↓
+Build
+ ↓
+Containerise
+ ↓
+Test
+ ↓
+Deploy
+ ↓
+Monitor
+ ↓
+Improve
+```
+
+The project is intended to demonstrate both application-development experience and practical Cloud & DevOps knowledge through an end-to-end implementation.
+
+---
+
+## Author
+
+Personal Cloud & DevOps project developed as part of continued hands-on learning in web development, containerisation, cloud infrastructure, automation, and modern application delivery.
