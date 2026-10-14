@@ -12,8 +12,9 @@ on:
       - 'docs/**'
       - 'README.md'
       - 'deploy/**'
+      - '.gitignore'
 
-      
+
 permissions:
   contents: read
   id-token: write
