@@ -1,313 +1,309 @@
-# RoastCart - CI/CD Artifact Pipeline with Azure Container Registry
+# RoastCart
 
-## Milestone Summary
+RoastCart is a minimal e-commerce web application built as a personal **Cloud & DevOps learning project**.
 
-RoastCart now has an automated **Continuous Integration (CI) + Continuous Delivery (CD)** artifact pipeline using GitHub Actions and Azure Container Registry (ACR).
+The application itself is intentionally kept simple so that the main focus can remain on the infrastructure, containerisation, deployment, CI/CD, cloud architecture, monitoring, and operational practices surrounding a modern three-tier web application.
 
-This milestone moves RoastCart from manually building production containers on a developer machine to automatically:
+## Project Status
 
-1. verifying production Docker builds on Pull Requests into `main`;
-2. rebuilding approved production images after changes reach `main`;
-3. tagging those images with the exact Git commit SHA; and
-4. publishing the immutable images to Azure Container Registry.
+**In Development**
 
-> In this milestone, **CD means Continuous Delivery**, not Continuous Deployment. The images are delivered to ACR and are ready for deployment, but they are not yet automatically deployed to a runtime such as Azure Container Apps.
+Current focus:
+
+> Completing the fully containerised local application stack before progressing toward cloud deployment and CI/CD automation.
 
 ---
 
-## CI vs Continuous Delivery
+The project follows a progressive approach:
 
-### Continuous Integration
+**Local development → Containers → Multi-container orchestration → Cloud deployment → CI/CD → Infrastructure automation → Monitoring**
 
-The CI portion answers:
+---
 
-> Can this code change safely produce valid production container images?
+## Project Objectives
 
-For Pull Requests into `main`:
+The main objectives of RoastCart are to:
 
-```text
-feature branch
-    |
-    v
-Pull Request -> main
-    |
-    v
-GitHub Actions
-    |
-    +-- Build backend production image
-    `-- Build frontend production image
-```
+- Build and operate a simple three-tier web application.
+- Apply Docker containerisation to individual application components.
+- Understand service-to-service networking using Docker Compose.
+- Deploy containerised workloads to Microsoft Azure.
+- Implement CI/CD workflows for automated build and deployment.
+- Explore Infrastructure as Code and cloud automation.
+- Apply monitoring, logging, security, and operational practices.
+- Document architectural decisions and learning milestones.
 
-The build runs on a clean GitHub-hosted Ubuntu runner.
-
-No production artifact is published from the feature branch.
-
-### Continuous Delivery
-
-The Continuous Delivery portion answers:
-
-> After a change is accepted into `main`, can I automatically produce a versioned artifact that is ready to deploy?
-
-```text
-merge / push -> main
-        |
-        v
-      verify
-        |
-        v
-      publish
-        |
-        +-- GitHub OIDC authentication
-        +-- Azure / ACR authentication
-        +-- Build backend image
-        +-- Build frontend image
-        +-- Tag with Git commit SHA
-        `-- Push to ACR
-```
-
-Result:
-
-```text
-<ACR_NAME>.azurecr.io/
-├── roastcart-backend:<git-sha>
-└── roastcart-frontend:<git-sha>
-```
-
-This is **Continuous Delivery** because deployable artifacts are automatically produced and stored after approved code reaches `main`.
-
-It is **not yet Continuous Deployment** because nothing automatically rolls those images out to a running Azure environment.
+The application domain is intentionally lightweight: a coffee storefront where users can browse coffee products and filter or search the available catalogue.
 
 ---
 
 ## Architecture
 
+RoastCart currently follows a three-tier architecture:
+
 ```text
-Developer
-    |
-    v
-Feature Branch
-    |
-    v
-Pull Request -> main
-    |
-    v
-GitHub Actions
-    |
-    +-------------------------------+
-    | Continuous Integration       |
-    | - checkout source             |
-    | - build backend image         |
-    | - build frontend image        |
-    | - fail PR if build fails      |
-    +---------------+---------------+
-                    |
-                 merge
-                    |
-                    v
-                  main
-                    |
-                    v
-GitHub Actions
-    |
-    +-------------------------------+
-    | Continuous Delivery          |
-    | - verify again                |
-    | - authenticate with OIDC      |
-    | - login to ACR                |
-    | - build production images     |
-    | - tag with github.sha         |
-    | - push images to ACR          |
-    +---------------+---------------+
-                    |
-                    v
-          Azure Container Registry
-                  Basic
-                    |
-          +---------+---------+
-          |                   |
-          v                   v
-roastcart-backend:<sha>  roastcart-frontend:<sha>
+┌─────────────────────┐
+│   React Frontend    │
+│       (Vite)        │
+└──────────┬──────────┘
+           │ HTTP / API
+           ▼
+┌─────────────────────┐
+│    Flask Backend    │
+│      REST API       │
+└──────────┬──────────┘
+           │ SQLAlchemy
+           ▼
+┌─────────────────────┐
+│     PostgreSQL      │
+│      Database       │
+└─────────────────────┘
 ```
+
+During local containerised development, Docker Compose manages the application services and provides a shared Docker network for communication between containers.
 
 ---
 
-## What This Milestone Demonstrates
+## Technology Stack
 
-- GitHub Actions workflow triggers
-- Pull Request based CI verification
-- Separate `verify` and `publish` jobs
-- Sequential job dependency using `needs: verify`
-- GitHub-hosted clean build runners
-- Production Docker image verification
-- Continuous Delivery of deployable container artifacts
-- GitHub OIDC authentication to Microsoft Entra ID
-- Entra application and service principal identity
-- Federated credential trust
-- Least-privilege Azure RBAC
-- `AcrPush` scoped to the registry
-- Temporary ACR access tokens
-- Docker login to a private container registry
-- Git SHA image versioning
-- Source-to-artifact traceability
-- Azure Container Registry Basic SKU
-- Azure Student region-policy awareness
+| Area | Technology |
+|---|---|
+| Frontend | React, Vite, JavaScript |
+| Backend | Python, Flask |
+| API | REST |
+| ORM | SQLAlchemy |
+| Database | PostgreSQL |
+| Containerisation | Docker |
+| Local orchestration | Docker Compose |
+| Cloud Platform | Microsoft Azure |
+| Version Control | Git, GitHub |
+| CI/CD | Planned |
+| Infrastructure as Code | Planned |
+| Monitoring | Planned |
 
 ---
 
-## Current GitHub Actions Behaviour
+## Current Features
 
-### Pull Request into `main`
+The current application supports a minimal coffee product catalogue.
 
-```text
-pull_request
-    |
-    v
-verify
-    |
-    +-- backend/Dockerfile.prod
-    `-- frontend/Dockerfile.prod
-    |
-    v
-PASS / FAIL
-```
+### Product API
 
-`publish` is skipped.
+The Flask backend provides endpoints for managing coffee products, including:
 
-### Push / Merge into `main`
+- Retrieve products
+- Create products
+- Update products
+- Soft-delete products
 
-```text
-push -> main
-    |
-    v
-verify
-    |
-    v
-publish
-    |
-    +-- Azure login through OIDC
-    +-- temporary ACR token
-    +-- Docker login
-    +-- backend:<github.sha>
-    `-- frontend:<github.sha>
-```
+The data model is intentionally simple so that additional functionality can be introduced later, such as:
+
+- Orders
+- Reviews
+- Customers
+- Inventory
+- Authentication
 
 ---
 
-## Why Git SHA Tags Are Used
+## Current Development Progress
 
-Instead of relying only on:
+### Completed
+
+- React frontend created
+- Flask REST API created
+- PostgreSQL database integrated
+- Product CRUD functionality implemented
+- React frontend connected to Flask API
+- PostgreSQL containerised
+- Flask backend containerised
+- Docker Compose configured
+- Backend and PostgreSQL communicating through a shared Docker network
+- Native React frontend successfully communicating with the containerised backend
+
+### Current Milestone
+
+The project is currently transitioning from a partially containerised architecture to a fully containerised local application.
 
 ```text
-latest
+Current
+
+React (Local)
+      │
+      ▼
+Flask Container
+      │
+      ▼
+PostgreSQL Container
 ```
 
-RoastCart publishes:
+The next immediate milestone is:
 
 ```text
-roastcart-backend:<git-sha>
-roastcart-frontend:<git-sha>
+React Container
+      │
+      ▼
+Flask Container
+      │
+      ▼
+PostgreSQL Container
 ```
 
-This provides:
-
-- exact source traceability;
-- immutable deployment references;
-- simpler rollback;
-- reproducible release identification.
-
-A normal merge may create a new merge commit on `main`, so the ACR tag can be the `main` merge commit SHA rather than the final feature-branch SHA.
+This will allow the full application stack to run through Docker Compose.
 
 ---
 
-## Why PostgreSQL Is Not Built or Published
+## Running the Containerised Services
 
-RoastCart uses the official PostgreSQL image:
-
-```yaml
-image: postgres:15-alpine
-```
-
-Therefore:
-
-```text
-backend   -> custom Dockerfile -> build -> publish to ACR
-frontend  -> custom Dockerfile -> build -> publish to ACR
-postgres  -> official image    -> pull when needed
-```
-
-PostgreSQL can later participate in integration testing or be replaced by Azure Database for PostgreSQL, but RoastCart does not own a PostgreSQL image that needs to be built.
-
----
-
-## Verification Commands
-
-List repositories:
+Start the services:
 
 ```bash
-az acr repository list \
-  --name <ACR_NAME> \
-  --output table
+docker compose up --build
 ```
 
-Show backend tags:
+View running containers:
 
 ```bash
-az acr repository show-tags \
-  --name <ACR_NAME> \
-  --repository roastcart-backend \
-  --output table
+docker compose ps
 ```
 
-Show frontend tags:
+View logs:
 
 ```bash
-az acr repository show-tags \
-  --name <ACR_NAME> \
-  --repository roastcart-frontend \
-  --output table
+docker compose logs
 ```
 
-Compare the `main` source SHA:
+Stop the environment:
 
 ```bash
-git checkout main
-git pull origin main
-git rev-parse HEAD
+docker compose down
+```
+
+Remove containers and associated volumes when a full reset is required:
+
+```bash
+docker compose down -v
 ```
 
 ---
 
-## Milestone Outcome
+## Docker Networking
 
-RoastCart now has a working **CI/CD artifact pipeline**:
+Docker Compose creates a shared network that allows containers to communicate using their **service names** instead of `localhost`.
+
+For example:
 
 ```text
-Source
-  |
-  v
-CI verification
-  |
-  v
-Approved main commit
-  |
-  v
-Continuous Delivery
-  |
-  v
-Immutable SHA-tagged container artifacts
-  |
-  v
+Flask
+  │
+  │ postgresql://...@postgres-db:5432/...
+  ▼
+postgres-db
+```
+
+Inside a container:
+The Flask application connects to PostgreSQL using the database service name defined in `docker-compose.yml`.
+
+This is one of the key learning milestones of the project: moving from host-based application communication to service-based container networking.
+
+---
+
+## Project Structure
+
+The project is organised around independently manageable application components.
+
+```text
+RoastCart/
+├── frontend/
+│   └── React application
+│
+├── backend/
+│   └── Flask REST API
+│
+├── docs/
+│   └── Architecture decisions and project documentation
+│
+├── docker-compose.yml
+├── README.md
+└── .env
+```
+
+The structure is designed to allow each component to be developed, containerised, deployed, and scaled independently.
+
+---
+
+## Planned Cloud & DevOps Roadmap
+
+The application will progressively move through the following stages:
+
+```text
+Application Development
+        │
+        ▼
+Containerisation
+        │
+        ▼
+Docker Compose
+        │
+        ▼
 Azure Container Registry
+        │
+        ▼
+Azure Deployment
+        │
+        ▼
+CI/CD Pipeline
+        │
+        ▼
+Infrastructure as Code
+        │
+        ▼
+Monitoring & Logging
 ```
 
-The application is not yet continuously deployed.
+Future areas of exploration include:
+
+- Azure-hosted frontend and backend
+- Managed PostgreSQL
+- Azure Container Registry
+- GitHub Actions
+- Automated container builds
+- Automated deployments
+- Terraform
+- Application monitoring
+- Logging and observability
+- Secrets management
+- Cloud networking
+- Scaling and availability
 
 ---
 
-## Next Milestone
+## Learning Focus
 
-The next pain point is:
+RoastCart is primarily an engineering learning project rather than a feature-heavy e-commerce platform.
 
-> The production images now exist in ACR, but the Azure infrastructure that will run them still needs to be created reproducibly.
+The focus is on understanding the complete lifecycle of an application:
 
-The next recommended milestone is therefore **Infrastructure as Code with Terraform**, followed by deploying the existing SHA-tagged images to a cost-conscious Azure runtime.
+```text
+Code
+ ↓
+Build
+ ↓
+Containerise
+ ↓
+Test
+ ↓
+Deploy
+ ↓
+Monitor
+ ↓
+Improve
+```
+
+The project is intended to demonstrate both application-development experience and practical Cloud & DevOps knowledge through an end-to-end implementation.
+
+---
+
+## Author
+
+Personal Cloud & DevOps project developed as part of continued hands-on learning in web development, containerisation, cloud infrastructure, automation, and modern application delivery.
