@@ -26,3 +26,26 @@ frontend/dist/
 # DB backups
 /backups/
 
+# ==========================================
+# Terraform / Infrastructure Automation
+# ==========================================
+# Ignore local plugins and binary downloads
+.terraform/
+
+# Ignore local configuration variables (contains secrets like DB passwords)
+*.tfvars
+*.tfvars.json
+
+# Ignore Terraform local state files (contains plain-text architecture mapping)
+*.tfstate
+*.tfstate.backup
+
+# Ignore override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
