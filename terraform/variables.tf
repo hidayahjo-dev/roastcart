@@ -27,3 +27,9 @@ variable "backend_image_tag" {
   description = "Git commit SHA tag of the RoastCart backend image in ACR"
   type        = string
 }
+
+variable "database_url" {
+  description = "PostgreSQL connection string"
+  type        = string
+  sensitive   = true
+}
