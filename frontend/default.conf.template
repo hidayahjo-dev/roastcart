@@ -1,0 +1,33 @@
+
+server {
+    listen 80;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Serve the React single-page application
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Forward API requests to the configured backend
+    location /api/ {
+        proxy_pass ${BACKEND_URL};
+
+        # Route requests using the backend hostname
+        proxy_set_header Host $proxy_host;
+
+        # Enable TLS Server Name Indication for HTTPS upstreams
+        proxy_ssl_server_name on;
+
+        # Verify HTTPS upstream certificates
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+
+        # Forward client request information
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

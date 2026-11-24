@@ -69,6 +69,9 @@ services:
     container_name: roastcart_react_frontend
     restart: unless-stopped
 
+    environment:
+      BACKEND_URL: "http://roastcart-backend:5000"
+
     ports:
       # HOST:CONTAINER
       # Browser -> localhost:3000 -> Nginx:80
