@@ -25,6 +25,16 @@ resource "azurerm_private_endpoint" "postgres" {
     is_manual_connection = false
   }
 
+
+  private_dns_zone_group {
+    name = "postgres-dns-zone-group"
+
+    private_dns_zone_ids = [
+      azurerm_private_dns_zone.postgres.id
+    ]
+  }
+
+
   tags = {
     project     = "roastcart"
     environment = "dev"
