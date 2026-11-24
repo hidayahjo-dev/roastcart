@@ -30,6 +30,7 @@ frontend/dist/
 # Terraform / Infrastructure Automation
 # ==========================================
 # Ignore local plugins and binary downloads
+**/.terraform/
 .terraform/
 
 # Ignore local configuration variables (contains secrets like DB passwords)

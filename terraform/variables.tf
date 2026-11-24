@@ -22,3 +22,14 @@ variable "private_endpoint_subnet_prefix" {
   description = "Existing Private Endpoint subnet CIDR"
   type        = string
 }
+
+variable "backend_image_tag" {
+  description = "Git commit SHA tag of the RoastCart backend image in ACR"
+  type        = string
+}
+
+variable "database_url" {
+  description = "PostgreSQL connection string"
+  type        = string
+  sensitive   = true
+}
